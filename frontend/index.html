@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ADSA · Engine Console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div class="brand-text">
+        <span class="brand-name">ADSA</span>
+        <span class="brand-sub">engine console</span>
+      </div>
+    </div>
+
+    <div class="topbar-controls">
+      <label class="workspace-select">
+        <span class="label-eyebrow">workspace</span>
+        <select id="workspace-select" aria-label="Select workspace">
+          <option value="test_workspace">test_workspace</option>
+        </select>
+      </label>
+      <button id="theme-toggle" class="theme-toggle" type="button"
+              aria-label="Switch to light theme" aria-pressed="false">
+        <svg class="icon-sun" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+          <circle cx="12" cy="12" r="4.4" fill="none" stroke="currentColor" stroke-width="1.7"/>
+          <g stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+            <line x1="12" y1="2.5" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="21.5"/>
+            <line x1="2.5" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="21.5" y2="12"/>
+            <line x1="5.2" y1="5.2" x2="7" y2="7"/><line x1="17" y1="17" x2="18.8" y2="18.8"/>
+            <line x1="5.2" y1="18.8" x2="7" y2="17"/><line x1="17" y1="7" x2="18.8" y2="5.2"/>
+          </g>
+        </svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+          <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"
+                fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="console-grid">
+
+    <!-- ================= FSM rail: the orchestrator's actual states ======== -->
+    <section class="panel rail-panel" aria-label="Pipeline phases">
+      <div class="rail" id="phase-rail">
+        <!-- populated by app.js -->
+      </div>
+      <div class="rail-meta">
+        <span class="label-eyebrow">session</span>
+        <span class="mono" id="session-project">—</span>
+      </div>
+    </section>
+
+    <!-- ================= Data Ingestion =================================== -->
+    <section class="panel ingest-panel" aria-label="Data ingestion">
+      <header class="panel-head">
+        <h2 class="panel-title">Data Ingestion</h2>
+        <span class="panel-note mono" id="ingest-status">No file selected</span>
+      </header>
+      <div class="ingest-body">
+        <div class="drop-zone" id="drop-zone">
+          <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <p>Drop a CSV, JSON, or Parquet file here<br>or <button class="link-btn" id="browse-btn" type="button">browse</button></p>
+          <input type="file" id="file-input" accept=".csv,.json,.parquet,application/json" hidden>
+        </div>
+        <div class="ingest-preview" id="ingest-preview" hidden>
+          <div class="preview-head">
+            <span class="preview-name mono" id="preview-name"></span>
+            <button class="btn-quiet" id="ingest-btn" type="button">Ingest into workspace</button>
+          </div>
+          <div class="preview-meta mono" id="preview-meta"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= Execution graph ================================== -->
+    <section class="panel steps-panel" aria-label="Execution graph">
+      <header class="panel-head">
+        <h2 class="panel-title">Execution graph</h2>
+        <span class="panel-note mono" id="steps-summary">—</span>
+      </header>
+      <ol class="step-list" id="step-list">
+        <!-- populated by app.js -->
+      </ol>
+    </section>
+
+    <!-- ================= Side column ====================================== -->
+    <aside class="side-col">
+
+      <section class="panel stats-panel" aria-label="Run statistics">
+        <header class="panel-head">
+          <h2 class="panel-title">This run</h2>
+        </header>
+        <dl class="stat-grid" id="stat-grid">
+          <!-- populated by app.js -->
+        </dl>
+      </section>
+
+      <section class="panel models-panel" aria-label="Model registry">
+        <header class="panel-head">
+          <h2 class="panel-title">Model registry</h2>
+        </header>
+        <ul class="model-list" id="model-list">
+          <!-- populated by app.js -->
+        </ul>
+      </section>
+
+      <section class="panel data-panel" aria-label="Active dataset">
+        <header class="panel-head">
+          <h2 class="panel-title">Active dataset</h2>
+        </header>
+        <div class="data-card" id="data-card">
+          <!-- populated by app.js -->
+        </div>
+      </section>
+
+    </aside>
+
+    <!-- ================= Console stream: the signature ==================== -->
+    <section class="panel log-panel" aria-label="Console output">
+      <header class="panel-head">
+        <h2 class="panel-title">Console</h2>
+        <div class="log-controls">
+          <button id="replay-btn" class="btn-quiet" type="button">Replay demo run</button>
+          <span class="live-dot" id="live-dot" hidden aria-hidden="true"></span>
+        </div>
+      </header>
+      <pre class="log-stream" id="log-stream" aria-live="polite"></pre>
+    </section>
+
+    <!-- ================= LLM Chat ========================================= -->
+    <section class="panel chat-panel" aria-label="LLM conversation">
+      <header class="panel-head">
+        <h2 class="panel-title">LLM Chat</h2>
+        <span class="panel-note" id="chat-status">Idle</span>
+      </header>
+      <div class="chat-body">
+        <div class="chat-history" id="chat-history" aria-live="polite">
+          <div class="chat-msg system">Start a conversation with the ADSA Architect.</div>
+        </div>
+        <div class="chat-input-row">
+          <input type="text" id="chat-input" class="chat-input" placeholder="Ask the architect..." autocomplete="off" aria-label="Message">
+          <button id="chat-send" class="btn-quiet" type="button">Send</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="foot">
+    <span class="mono">demo data — wire endpoints in <span class="foot-path">js/app.js → api</span></span>
+  </footer>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

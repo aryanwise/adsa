@@ -1,0 +1,9 @@
+.venv
+.python-version
+.env
+notes.txt
+workspaces
+adsa.egg-info
+Pyodide cross-compilation with Deno sandboxed runtime overview.png
+__pycache__/
+*.pyc

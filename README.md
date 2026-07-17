@@ -2,7 +2,7 @@
 
 [![Live App](https://img.shields.io/badge/Live%20Demo-Streamlit-FF4B4B?style=for-the-badge&logo=streamlit)](https://autonomousdatascienceagent.streamlit.app/)
 
-Welcome to the **Autonomous Data Science Agent (ADSA)**—an intelligent orchestration framework that completely automates the machine learning lifecycle. Provide a raw dataset, and ADSA will autonomously profile the data, engineer features, train and evaluate models, and write an executive summary of its findings, completely hands-free.
+Welcome to the **Autonomous Data Science Agent (ADSA)**—an intelligent orchestration framework that completely automates the machine learning lifecycle. Provide a raw dataset along with objective and ADSA will autonomously profile the data, engineer features, train and evaluate models, and write an executive summary of its findings, completely hands-free.
 
 ---
 

@@ -5,7 +5,7 @@ Run from the repo root:
     export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES && streamlit run dashboard.py
 
 Reads everything from workspaces/<name>/ — no engine imports, no API needed.
-Sections: Executive Summary, Leaderboard, Data & Blueprint, Engine Logs.
+Sections: Executive Summary, Leaderboard, Data Overview, Pipeline Blueprint, Engine Logs.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ STATUS_COLOR = {
     "FAILED": PALETTE["err"], "HALTED": PALETTE["err"],
 }
 
-# ============================================================ safe data loaders (no pandas/pyarrow segfault risk)
+# ============================================================ safe data loaders
 @st.cache_data
 def load_json(path: Path) -> dict:
     try:
@@ -89,9 +89,6 @@ def safe_read_csv_rows(path: Path) -> tuple[list[str], list[list[str]]]:
         pass
     return headers, rows
 
-def csv_to_dict_list(headers: list[str], rows: list[list[str]]) -> list[dict]:
-    return [dict(zip(headers, row)) for row in rows]
-
 def try_float(val: str) -> float | None:
     try:
         return float(val)
@@ -127,7 +124,6 @@ def leaderboard_data(ws: Path) -> list[dict] | None:
     headers, rows = safe_read_csv_rows(path)
     if not headers or not rows:
         return None
-    # Find numeric columns
     numeric_cols = []
     for c in headers:
         for row in rows:
@@ -164,7 +160,7 @@ def dataset_stats(ws: Path) -> dict:
 
 def infer_target(ws: Path, session: dict) -> str:
     objective = session.get("Phase_1_Planning", {}).get("prompt", "")
-    m = re.search(r"['']([A-Za-z_][A-Za-z0-9_]*)['']", objective)
+    m = re.search(r"['\"]([A-Za-z_][A-Za-z0-9_]*)['\"]", objective)
     if m:
         return m.group(1)
     return "—"
@@ -242,7 +238,9 @@ def main() -> None:
 
     summary = pipeline_summary(session, ws)
 
-    # ---------------- header: phase rail + headline metrics
+    # ---------------- header: Main Title & phase rail + headline metrics
+    st.title("A.D.S.A (Autonomous Data Science Agent)")
+    
     phases = [("plan", "Phase_1_Planning"), ("execute", "Phase_2_Execution"),
               ("report", "Phase_3_Reporting")]
     chips = "".join(chip(lbl, session.get(key, {}).get("status", "PENDING"))
@@ -257,9 +255,9 @@ def main() -> None:
     c4.metric("Holdout F1 Score", f"{summary['holdout_f1']:.3f}" if summary["holdout_f1"] is not None else "—")
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ---------------- Clean Tabs Layout
-    tab_report, tab_board, tab_data, tab_pipe = st.tabs([
-        "Executive Summary", "Model Leaderboard", "Data & Blueprint", "Engine Logs"
+    # ---------------- 6 Tabs Layout
+    tab_report, tab_board, tab_overview, tab_data, tab_blueprint, tab_pipe = st.tabs([
+        "Executive Summary", "Model Leaderboard", "Dataset Overview", "Data Explorer", "Pipeline Blueprint", "Engine Logs"
     ])
 
     # ---------------- TAB 1: Executive Summary
@@ -293,11 +291,9 @@ def main() -> None:
         with left:
             st.markdown('<div class="eyebrow">cross-validation score comparison</div>', unsafe_allow_html=True)
             if lb is not None:
-                # Native st.bar_chart — no altair, no segfault risk
                 chart_data = {row["model"]: row["score"] for row in lb}
                 st.bar_chart(chart_data, use_container_width=True)
 
-                # Full matrix as plain table
                 full_headers, full_rows = safe_read_csv_rows(ws / "artifacts" / "model_cv_report.csv")
                 with st.expander("View Full Cross-Validation Matrix"):
                     if full_headers:
@@ -311,11 +307,20 @@ def main() -> None:
             st.markdown('<div class="eyebrow">holdout evaluation matrix</div>', unsafe_allow_html=True)
             cm = ws / "artifacts" / "confusion_matrix.png"
             if cm.exists():
-                st.image(str(cm), use_column_width=True)
+                st.image(str(cm), use_container_width=True)
             else:
                 st.caption("confusion_matrix.png not found.")
 
-    # ---------------- TAB 3: Data & Blueprint
+    # ---------------- TAB 3: Dataset Overview
+    with tab_overview:
+        st.markdown('<div class="eyebrow">Phase 1 LLM Dataset Overview</div>', unsafe_allow_html=True)
+        summary_txt = load_text(ws / "data_info" / "llm_summary.txt")
+        if summary_txt:
+            st.markdown(summary_txt)
+        else:
+            st.info("_llm_summary.txt not found._")
+
+    # ---------------- TAB 4: Data Explorer (Metrics & Profiler)
     with tab_data:
         stats = dataset_stats(ws)
         target = infer_target(ws, session)
@@ -333,25 +338,23 @@ def main() -> None:
             else:
                 st.warning("Could not preview active CSV.")
 
-        left, right = st.columns(2)
-        with left:
-            st.markdown('<div class="eyebrow">Phase 1 Data Profiler Summary</div>', unsafe_allow_html=True)
-            summary_txt = load_text(ws / "data_info" / "llm_summary.txt")
-            st.markdown(summary_txt or "_llm_summary.txt not found._")
-        with right:
-            st.markdown('<div class="eyebrow">Raw Statistical Profile JSON</div>', unsafe_allow_html=True)
-            if stats["profile"]:
-                with st.expander("data_profile.json", expanded=False):
-                    st.json(stats["profile"])
-            else:
-                st.caption("No profile JSON found.")
-
+        st.markdown('<br><div class="eyebrow">Phase 1 Profiler Summary (JSON)</div>', unsafe_allow_html=True)
+        if stats["profile"]:
+            with st.expander("View data_profile.json", expanded=False):
+                st.json(stats["profile"])
+        else:
+            st.caption("No profile JSON found.")
+            
+    # ---------------- TAB 4: Pipeline Blueprint
+    with tab_blueprint:
         st.markdown('<div class="eyebrow">Phase 1 Pipeline Contract (Blueprint)</div>', unsafe_allow_html=True)
         blueprint = load_text(ws / "data_info" / "blueprint.md")
-        with st.expander("View blueprint.md", expanded=False):
-            st.markdown(blueprint or "_blueprint.md not found._")
+        if blueprint:
+            st.markdown(blueprint)
+        else:
+            st.info("_blueprint.md not found._")
 
-    # ---------------- TAB 4: Engine Logs
+    # ---------------- TAB 5: Engine Logs
     with tab_pipe:
         plan = session.get("Phase_2_Execution", {}).get("execution_plan", {})
         results = session.get("Phase_2_Execution", {}).get("step_results", {})

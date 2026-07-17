@@ -29,10 +29,15 @@ class Phase1Orchestrator:
         if not env_path.exists():
             env_path.touch()
             
-        load_dotenv(dotenv_path=env_path)
-        
-        # Check if the keys exist specifically in this environment
-        if not os.getenv("GROQ_CODING_KEY"):
+        load_dotenv(dotenv_path=env_path, override=True)
+
+        # Read the FILE directly — ambient shell env vars must not mask an
+        # empty file, and a populated file must never trigger a re-prompt.
+        from dotenv import dotenv_values
+        file_vals = dotenv_values(env_path)
+        has_key = bool(file_vals.get("GROQ_CODING_KEY") or file_vals.get("GROQ_API_KEY")
+                       or os.getenv("GROQ_CODING_KEY") or os.getenv("GROQ_API_KEY"))
+        if not has_key:
             console.print("\n[bold yellow]🔒 Workspace Security: No Groq API Key found for this workspace.[/bold yellow]")
             api_key = Prompt.ask("[bold white]🔑 Please enter your Groq API Key (it will be saved to this workspace's .env)[/bold white]", password=True)
             set_key(str(env_path), "GROQ_CODING_KEY", api_key)
@@ -106,11 +111,6 @@ class Phase1Orchestrator:
             blueprint_path = self.data_info_dir / "blueprint.md"
             with open(blueprint_path, "w", encoding="utf-8") as f:
                 f.write(blueprint)
-
-            # 5. SAVE BLUEPRINT AS MARKDOWN FILE
-            blueprint_path = self.data_info_dir / "blueprint.md"
-            with open(blueprint_path, "w", encoding="utf-8") as f:
-                f.write(blueprint)
                 
             # --- EXTRACT DYNAMIC REQUIREMENTS ---
             console.print("  [white]├─ Generating requirements.txt...[/white]")
@@ -129,15 +129,24 @@ class Phase1Orchestrator:
                         break
                     
                     if clean_line.startswith(('-', '*', '•')):
-                        # Use lstrip to ONLY remove the bullet points at the start of the line
-                        # Then split to grab the word, and strip any backticks
                         stripped_line = clean_line.lstrip('-*• ').strip()
                         parts = stripped_line.split()
-                        
+
                         if len(parts) > 0:
-                            pkg_name = parts[0].replace('`', '').lower()
-                            if pkg_name:
+                            pkg_name = parts[0].replace('`', '').replace('*', '').lower()
+                            # VALIDATION GATE: the requirements section sits at the
+                            # END of the blueprint, so a max_tokens truncation can
+                            # leave a half-written package (the infamous '- sc').
+                            # Accept only plausible, known-complete PyPI names.
+                            import re as _re
+                            valid_shape = bool(_re.fullmatch(r"[a-z0-9][a-z0-9._-]{1,60}", pkg_name))
+                            known_short = {"uv", "tqdm", "rich", "dill", "h5py", "sympy"}
+                            too_short = len(pkg_name) < 4 and pkg_name not in known_short
+                            prose_word = pkg_name in {"and", "the", "for", "with", "etc", "none"}
+                            if valid_shape and not too_short and not prose_word:
                                 requirements.append(pkg_name)
+                            elif pkg_name:
+                                console.print(f"  [yellow]│    ↳ skipped suspicious package token: '{pkg_name}'[/yellow]")
             
             req_path = self.workspace_path / "requirements.txt"
             with open(req_path, "w", encoding="utf-8") as f:

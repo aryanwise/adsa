@@ -77,8 +77,13 @@ class Architect:
 
 class Coder:
     """Autonomous Python script generator for Phase 2 Execution."""
-    MODEL = os.getenv("GROQ_CODING_KEYL", "llama-3.3-70b-versatile")
-    ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
+    # llama-3.3-70b-versatile was deprecated by Groq on 2026-06-17 (free/dev tiers).
+    # gpt-oss-120b is the recommended migration and already powers the Architect.
+    # MODEL = os.getenv("CODER_MODEL", "llama-3.3-70b-versatile")
+    MODEL = "qwen2.5:7b-instruct"
+    # ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
+    ENDPOINT = "http://localhost:11434/v1/chat/completions"
+    TEMPERATURE = 0.1
     TEMPERATURE = 0.1
     MAX_TOKENS = 4096
     TIMEOUT_SECONDS = 120
@@ -91,15 +96,29 @@ class Coder:
     3. All data reads/writes must use relative paths targeting 'data/active/copy_test_data.csv' or the 'artifacts/' folder.
     4. PROTECT CONTEXT TOKENS: Never print entire DataFrames or arrays. Only print df.shape, df.head(2), or specific metrics.
     5. NEVER SWALLOW ERRORS: Do NOT wrap your imports or file loading in `try...except` blocks. Let the script crash natively with full tracebacks so the system orchestrator can catch them.
+    6. STATE HANDOFF: If (and only if) you overwrite the active CSV, the LAST line of the script must print the new state exactly like: print(f"STATE shape={df.shape} columns={list(df.columns)}")
     """
 
     @staticmethod
     def get_user_prompt(step_title: str, step_details: str,
-                        full_plan: str, summary_txt: str, memory_str: str) -> str:
+                        full_plan: str, summary_txt: str, memory_str: str,
+                        live_state: str = "(live probe unavailable)") -> str:
         return f"""
         ========================================================================
-        🧠 LIVE SANDBOX MEMORY (Outputs from previous steps):
+        📊 LIVE DATA STATE (ground truth, probed from disk RIGHT NOW):
+        {live_state}
+
+        THIS SECTION IS AUTHORITATIVE. These are the exact files, columns, and
+        dtypes that exist at this moment. Use ONLY these column names.
+        ========================================================================
+
+        🧠 SANDBOX MEMORY (console output from previous steps):
         {memory_str}
+        ========================================================================
+
+        📈 ORIGINAL DATASET PROFILE (statistics from the RAW data at ingestion;
+        column layout may have changed since — trust LIVE DATA STATE for schema):
+        {summary_txt}
         ========================================================================
 
         📋 PIPELINE MARKDOWN CONTRACT (Your master instructions):
@@ -114,15 +133,23 @@ class Coder:
 
         IMPLEMENTATION INSTRUCTIONS:
         - Output ONLY pure python code inside a single ```python block.
-        - Read the LIVE SANDBOX MEMORY to see exactly what columns exist *right now* and what files were saved.
-        - DO NOT guess the state of the data. Rely entirely on the memory logs and the active CSV file.
+        - Column names MUST come from LIVE DATA STATE. Never invent or assume columns.
+        - Use the ORIGINAL PROFILE only for statistics (skew, ranges), never for schema.
         - Read the PIPELINE MARKDOWN CONTRACT to ensure you do not violate the Target Isolation or Validation Boundaries.
         """
 
     @staticmethod
-    def get_fix_prompt(broken_code: str, traceback: str) -> str:
+    def get_fix_prompt(broken_code: str, traceback: str,
+                       step_details: str = "", live_state: str = "") -> str:
         return f"""
         The previously generated Python script crashed during sandboxed execution.
+
+        📊 LIVE DATA STATE (ground truth, probed from disk AFTER the crash —
+        a crashed script may have already mutated files, so trust this, not the code):
+        {live_state}
+
+        🎯 THE STEP THIS SCRIPT MUST ACCOMPLISH:
+        {step_details}
 
         [BROKEN SCRIPT]:
         ```python
@@ -133,7 +160,9 @@ class Coder:
         {traceback}
 
         Analyze the traceback, find the root cause, and rewrite the ENTIRE corrected
-        script. Preserve the step's intent and its input/output file contracts.
+        script. Column names MUST come from LIVE DATA STATE — if the traceback is a
+        KeyError, the fix is almost always using a column that actually exists there.
+        Preserve the step's intent and its input/output file contracts.
         Output ONLY the fixed script inside a single ```python block.
         """
 

@@ -7,3 +7,5 @@ adsa.egg-info
 Pyodide cross-compilation with Deno sandboxed runtime overview.png
 __pycache__/
 *.pyc
+Pipeline Notes.txt
+.DS_Store

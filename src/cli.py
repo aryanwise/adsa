@@ -19,7 +19,7 @@ console = Console(color_system="standard")
 
 def print_custom_help(ctx):
     """Prints a custom-styled help page matching the exact uv color palette."""
-    console.print("Autonomous Data Science Agent Engine.")
+    console.print("A.D.S.A (Autonomous Data Science Agent)")
     
     console.print("\n[green]Usage:[/green] adsa [cyan]<COMMAND>[/cyan] [cyan][OPTIONS][/cyan]")
     

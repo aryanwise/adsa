@@ -102,23 +102,52 @@ class SandboxExecutor:
                 f.write(f"{package}\n")
 
     def _pip_install_requirements(self) -> bool:
+        """Bulk install; on failure, fall back to per-package installs and PRUNE
+        unresolvable entries (e.g. truncated names like 'sc') from
+        requirements.txt so one junk line can never poison the whole file."""
         python_bin = self._get_python_executable()
-        
-        # We removed the "--quiet" flag to see what pip is doing
         base_cmd = [python_bin, "-m", "pip", "install", "-r",
                     str(self.requirements_path)]
-                    
+
         result = subprocess.run(base_cmd, capture_output=True, text=True)
-        
         if result.returncode != 0 and "externally-managed-environment" in result.stderr:
             result = subprocess.run(base_cmd + ["--break-system-packages"],
                                     capture_output=True, text=True)
-                                    
-        # IF IT FAILS, PRINT THE EXACT ERROR TO THE TERMINAL
-        if result.returncode != 0:
-            console.print(f"      [bold red]Pip Error Details:[/bold red]\n{result.stderr.strip()}")
-            
-        return result.returncode == 0
+        if result.returncode == 0:
+            return True
+
+        # ---- per-package salvage pass ----
+        console.print("      [yellow]⚕ Bulk install failed — resolving packages "
+                      "individually...[/yellow]")
+        lines = [l.strip() for l in
+                 self.requirements_path.read_text(encoding="utf-8").splitlines()
+                 if l.strip() and not l.strip().startswith("#")]
+        keep: list[str] = []
+        all_ok = True
+        for pkg in lines:
+            r = subprocess.run([python_bin, "-m", "pip", "install", pkg, "--quiet"],
+                               capture_output=True, text=True)
+            if r.returncode != 0 and "externally-managed-environment" in r.stderr:
+                r = subprocess.run([python_bin, "-m", "pip", "install", pkg,
+                                    "--quiet", "--break-system-packages"],
+                                   capture_output=True, text=True)
+            if r.returncode == 0:
+                keep.append(pkg)
+            elif ("No matching distribution" in r.stderr
+                  or "Invalid requirement" in r.stderr
+                  or "not find a version" in r.stderr):
+                console.print(f"      [yellow]⚕ pruned unresolvable requirement:"
+                              f" '{pkg}'[/yellow]")
+            else:
+                # Real install failure (build error, network): keep the line,
+                # report the tail, and flag the run as degraded.
+                keep.append(pkg)
+                all_ok = False
+                console.print(f"      [bold red]Pip failed for '{pkg}':[/bold red] "
+                              f"{r.stderr.strip().splitlines()[-1] if r.stderr.strip() else 'unknown'}")
+        self.requirements_path.write_text("\n".join(keep) + ("\n" if keep else ""),
+                                          encoding="utf-8")
+        return all_ok
 
     def _attempt_self_heal(self, stderr: str) -> bool:
         """Detect a missing module, install it, and report whether to re-run."""

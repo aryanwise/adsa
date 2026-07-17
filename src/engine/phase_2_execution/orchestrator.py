@@ -97,23 +97,70 @@ class Phase2Orchestrator:
 
     # ------------------------------------------------------------- engine
     
-    def _get_safe_history(self, step_results: dict, max_chars: int = 1500) -> str:
+    def _get_safe_history(self, step_results: dict, max_chars: int = 1500,
+                          full_window: int = 3) -> str:
         """
-        Token-Safe Memory: Truncates historical stdout/stderr to prevent API bloat 
-        while preserving the state and shape of the data for the next step.
+        Token-Safe Sliding Memory: full stdout tails for the last `full_window`
+        steps, one-line status for anything older. Prevents prompt bloat on
+        long pipelines while keeping recent context rich.
         """
         if not step_results:
             return "No prior steps executed. You are on Step 1."
-            
+
+        items = list(step_results.items())
         history = ""
-        for step_id, data in step_results.items():
+        for position, (step_id, data) in enumerate(items):
+            is_recent = position >= len(items) - full_window
             if data.get("success"):
-                tail = data.get('stdout_tail', '')[-max_chars:]
-                history += f"✅ {step_id} SUCCESS:\n...{tail}\n\n"
+                if is_recent:
+                    tail = data.get("stdout_tail", "")[-max_chars:]
+                    history += f"✅ {step_id} SUCCESS:\n...{tail}\n\n"
+                else:
+                    history += f"✅ {step_id} SUCCESS (output elided)\n"
             else:
-                tail = data.get('stderr_tail', '')[-max_chars:]
+                tail = data.get("stderr_tail", "")[-max_chars:]
                 history += f"❌ {step_id} FAILED:\n...{tail}\n\n"
         return history
+
+    def _probe_active_data(self, sample_rows: int = 5) -> str:
+        """
+        Ground-truth probe: reads the ACTUAL schema of every file currently in
+        data/active/ (plus artifacts/ inventory). This — not stdout memory — is
+        what stops the coder hallucinating columns. Called fresh before every
+        attempt, because a crashed script may have half-mutated the CSV.
+        """
+        lines: list[str] = []
+        active_dir = self.workspace_path / "data" / "active"
+        if active_dir.exists():
+            for f in sorted(active_dir.iterdir()):
+                if not f.is_file():
+                    continue
+                rel = f.relative_to(self.workspace_path)
+                try:
+                    if f.suffix.lower() == ".csv":
+                        import pandas as pd
+                        head = pd.read_csv(f, nrows=sample_rows)
+                        with open(f, "rb") as fh:
+                            n_rows = max(sum(1 for _ in fh) - 1, 0)
+                        dtypes = ", ".join(f"{c}:{t}" for c, t in
+                                           zip(head.columns, head.dtypes.astype(str)))
+                        lines.append(f"FILE {rel} | rows={n_rows} | columns({len(head.columns)}): [{dtypes}]")
+                    elif f.suffix.lower() == ".parquet":
+                        import pandas as pd
+                        df = pd.read_parquet(f)
+                        dtypes = ", ".join(f"{c}:{t}" for c, t in
+                                           zip(df.columns, df.dtypes.astype(str)))
+                        lines.append(f"FILE {rel} | rows={len(df)} | columns({len(df.columns)}): [{dtypes}]")
+                    else:
+                        lines.append(f"FILE {rel} | size={f.stat().st_size}B")
+                except Exception as exc:
+                    lines.append(f"FILE {rel} | UNREADABLE ({type(exc).__name__}: {str(exc)[:80]})")
+        artifacts_dir = self.workspace_path / "artifacts"
+        if artifacts_dir.exists():
+            names = sorted(a.name for a in artifacts_dir.iterdir() if a.is_file())
+            if names:
+                lines.append("ARTIFACTS saved so far: " + ", ".join(names[:20]))
+        return "\n".join(lines) if lines else "No files in data/active/ yet."
 
     def execute(self) -> bool:
         try:
@@ -207,7 +254,11 @@ class Phase2Orchestrator:
                          script_abs: Path, script_rel: str, step_id: str,
                          phase2: dict) -> bool:
         step["status"] = "IN_PROGRESS"
-        step.setdefault("attempts", 0)
+        # RESUME FIX: attempts persist in session_state.json, so a step that
+        # halted at attempts=2 in a PREVIOUS run would otherwise resume straight
+        # into the repair branch with EMPTY broken_code. Each engine invocation
+        # gets a fresh attempt budget.
+        step["attempts"] = 0
         self._persist_state()
 
         current_code: str = ""
@@ -221,22 +272,26 @@ class Phase2Orchestrator:
             attempt: int = step["attempts"]
             self._persist_state()
 
+            # Ground truth, re-probed EVERY attempt: a crashed script may have
+            # already mutated data/active/ before it died.
+            live_state = self._probe_active_data()
+
             try:
                 if attempt == 1:
                     console.print(f"  [white]│    ↳ generating script "
                                   f"(attempt {attempt}) ...[/white]")
-                    
-                    # UPDATED: Pass full_blueprint cleanly and add memory_str as its own argument
+
                     current_code = coder.generate_script(
                         step_title=title, step_details=details,
                         full_blueprint=full_blueprint, profile_data=profile_data,
-                        memory_str=memory_str)
+                        memory_str=memory_str, live_state=live_state)
                 else:
                     console.print(f"  [white]│    ↳ repairing script "
                                   f"(attempt {attempt}) ...[/white]")
                     current_code = coder.fix_code(
                         broken_code=current_code,
-                        traceback=last_result.get("stderr", "")[-3000:])
+                        traceback=last_result.get("stderr", "")[-3000:],
+                        step_details=details, live_state=live_state)
             except AICoderError as exc:
                 console.print(f"  [white]│    ↳[/white] [red]generation failed: {exc}[/red]")
                 return False

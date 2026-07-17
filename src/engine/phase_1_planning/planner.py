@@ -33,7 +33,7 @@ class PipelinePlanner:
                     model=Architect.MODEL, 
                     messages=messages,
                     temperature=0.2,  # Dropped slightly for tighter formatting compliance
-                    max_tokens=2000
+                    max_tokens=4096  # requirements list sits at the END; 2000 truncated it mid-package
                 )
                 
                 plan = response.choices[0].message.content

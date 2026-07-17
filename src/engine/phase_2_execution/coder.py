@@ -82,6 +82,13 @@ class AICoder:
                     last_error = f"HTTP {response.status_code}: {response.text[:200]}"
                     time.sleep(2 ** (attempt + 1))
                     continue
+                if response.status_code in (400, 404):
+                    # Model decommissioned / bad request: retrying is pointless.
+                    raise AICoderError(
+                        f"Groq rejected the request (HTTP {response.status_code}) for "
+                        f"model '{Coder.MODEL}'. If the body below says decommissioned, "
+                        f"update CODER_MODEL or config.Coder.MODEL. Body: "
+                        f"{response.text[:300]}")
                 response.raise_for_status()
                 return response.json()["choices"][0]["message"]["content"]
             except requests.RequestException as exc:
@@ -91,7 +98,8 @@ class AICoder:
 
     # ------------------------------------------------------------- public
     def generate_script(self, step_title: str, step_details: str,
-                        full_blueprint: str, profile_data: dict, memory_str: str) -> str:
+                        full_blueprint: str, profile_data: dict, memory_str: str,
+                        live_state: str = "(live probe unavailable)") -> str:
         """Compile one blueprint step into a pure Python script string."""
         summary_txt = json.dumps(profile_data, indent=2, default=str)
         prompt = Coder.get_user_prompt(
@@ -99,11 +107,14 @@ class AICoder:
             step_details=step_details,
             full_plan=full_blueprint,
             summary_txt=summary_txt,
-            memory_str=memory_str  
+            memory_str=memory_str,
+            live_state=live_state,
         )
         return self._extract_code(self._chat(prompt))
 
-    def fix_code(self, broken_code: str, traceback: str) -> str:
+    def fix_code(self, broken_code: str, traceback: str,
+                 step_details: str = "", live_state: str = "") -> str:
         """Feed a crashed script + traceback back to Groq for a repaired variant."""
-        prompt = Coder.get_fix_prompt(broken_code=broken_code, traceback=traceback)
+        prompt = Coder.get_fix_prompt(broken_code=broken_code, traceback=traceback,
+                                      step_details=step_details, live_state=live_state)
         return self._extract_code(self._chat(prompt))

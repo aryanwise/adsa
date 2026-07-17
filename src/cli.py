@@ -19,7 +19,7 @@ console = Console(color_system="standard")
 
 def print_custom_help(ctx):
     """Prints a custom-styled help page matching the exact uv color palette."""
-    console.print("A.D.S.A (Autonomous Data Science Agent)")
+    console.print("Autonomous Data Science Agent Engine.")
     
     console.print("\n[green]Usage:[/green] adsa [cyan]<COMMAND>[/cyan] [cyan][OPTIONS][/cyan]")
     
@@ -182,8 +182,15 @@ def run(project_name, phase, step):
             sys.exit(1)
         
     elif phase == '3':
-        console.print(f"[white]Executing Phase 3...[/white]")
-        console.print("[bold yellow]Development Notice:[/bold yellow] Phase 3 orchestrator pending.")
+        try:
+            from engine.phase_3_reporting.reporting import Phase3Reporter
+        except ImportError as e:
+            console.print(f"[bold red]Error importing Phase 3 Reporter:[/bold red] {e}")
+            sys.exit(1)
+
+        reporter = Phase3Reporter(workspace_path=str(target_dir))
+        if not reporter.execute():
+            sys.exit(1)
         
     else:
         console.print("[white]Executing Full Pipeline (Phases 1 -> 2 -> 3)...[/white]")

@@ -167,25 +167,59 @@ class Coder:
         """
 
 class Analyst:
-    """Senior executive-grade summary reporting & massive token validation"""
-    MODEL = "gemini-1.5-pro-preview-0409"
-
+    """Senior executive-grade summary reporting (Phase 3 final call)."""
+    # _override = os.getenv("ANALYST_MODEL", "").strip()
+    # if _override.startswith(("gsk_", "sk-", "key", "Bearer")) or " " in _override:
+    #     print("[config] WARNING: ANALYST_MODEL looks like a credential — ignoring.")
+    #     _override = ""
+    # MODEL = _override or "openai/gpt-oss-120b"
+    # del _override
+    MODEL = os.getenv("CODER_MODEL", "llama-3.3-70b-versatile")
+    ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
+ 
     SYSTEM_PROMPT = """
-    You are a Senior Data Science Lead Analyst. Your task is to perform an executive validation audit
-    on automated pipeline runs, rendering highly professional performance wrap-ups.
+    You are a Senior Data Science Lead Analyst writing the final report of an
+    automated pipeline run for both technical and executive readers.
+ 
+    NON-NEGOTIABLE RULES:
+    1. EVERY number in your report (F1, accuracy, shapes, row counts) must come
+       verbatim from the evidence provided. NEVER invent, estimate, or round
+       beyond what the logs show. If a value is absent, write "not recorded".
+    2. If any step shows FAILED status or suspicious output, call it out
+       honestly in a Limitations section — do not paper over it.
+    3. Output clean Markdown only. No conversational preamble or sign-off chatter.
     """
-
+ 
+    @staticmethod
+    def get_report_prompt(context: str) -> str:
+        return f"""
+        Below is the complete evidence package from an autonomous data science
+        pipeline run. Synthesize the final report.
+ 
+        {context}
+ 
+        REQUIRED REPORT STRUCTURE (Markdown):
+        # <Concise title naming the task and dataset>
+        ## Executive Summary            (3-5 sentences: goal, approach, headline result)
+        ## Dataset Overview             (ground it in the provided dataset overview)
+        ## Methodology                  (walk the executed steps; note repairs/attempts)
+        ## Model Performance            (winning model, CV table comparison, holdout results;
+                                         reference artifacts/confusion_matrix.png as an image)
+        ## Production Artifacts         (what was persisted and how to use it for inference)
+        ## Limitations & Recommendations (honest caveats: data size, class balance, next steps)
+        """
+ 
     @staticmethod
     def get_user_prompt(profile_data: dict, execution_stdout: str) -> str:
         return f"""
         Review the pipeline execution outcomes to finalize our model deployment validation.
-
+ 
         Data Profile Specs:
         {json.dumps(profile_data, indent=2)}
-
+ 
         Sandbox Run Log Output:
         {execution_stdout}
-
+ 
         Please synthesize a concise markdown technical performance summary report, verifying
         model stability, feature transformation integrity, and explicit sign-off recommendations.
         """

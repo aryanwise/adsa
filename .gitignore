@@ -2,7 +2,7 @@
 .python-version
 .env
 notes.txt
-workspaces
+# workspaces
 adsa.egg-info
 Pyodide cross-compilation with Deno sandboxed runtime overview.png
 __pycache__/

@@ -1,0 +1,4 @@
+Model,Mean Macro F1
+Logistic Regression,0.9047619047619048
+Random Forest,1.0
+XGBoost,0.9844444444444445

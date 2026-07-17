@@ -1,0 +1,30 @@
+{
+    "TOTAL_REVENUE_USD": {
+        "count": 100,
+        "mean": 5362.7798,
+        "std": 5444.779609096246,
+        "min": 120.75,
+        "25%": 787.5625,
+        "50%": 2950.0,
+        "75%": 9400.0,
+        "max": 16500.0,
+        "iqr": 8612.4375,
+        "lower_outlier_threshold": -12131.09375,
+        "upper_outlier_threshold": 22318.65625,
+        "skewness": 0.7528682335657785
+    },
+    "ITEM_COUNT": {
+        "count": 100,
+        "mean": 6.55,
+        "std": 5.897054563530213,
+        "min": 1.0,
+        "25%": 2.0,
+        "50%": 4.0,
+        "75%": 10.25,
+        "max": 21.0,
+        "iqr": 8.25,
+        "lower_outlier_threshold": -10.375,
+        "upper_outlier_threshold": 22.625,
+        "skewness": 0.9655098297765842
+    }
+}

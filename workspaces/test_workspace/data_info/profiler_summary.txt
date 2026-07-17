@@ -1,0 +1,88 @@
+{
+    "dataset": {
+        "path": "/Users/aryanmishra/Documents/adsa/workspaces/test_workspace/data/active/copy_test_data.csv",
+        "rows": 100,
+        "columns": 5
+    },
+    "columns": {
+        "ORDER_ID": {
+            "dtype": "String",
+            "null_pct": 0.0,
+            "n_unique": 100
+        },
+        "MONTH_KEY": {
+            "dtype": "String",
+            "null_pct": 0.0,
+            "n_unique": 10,
+            "top_values": {
+                "2026-01": 14,
+                "2026-06": 10,
+                "2026-07": 10,
+                "2026-08": 10,
+                "2026-10": 10
+            }
+        },
+        "CUSTOMER_SEGMENT": {
+            "dtype": "String",
+            "null_pct": 0.0,
+            "n_unique": 4,
+            "top_values": {
+                "Enterprise": 37,
+                "Consumer": 21,
+                "SMB": 21,
+                "Mid-Market": 21
+            }
+        },
+        "TOTAL_REVENUE_USD": {
+            "dtype": "Float64",
+            "null_pct": 0.0,
+            "n_unique": 72,
+            "min": 120.75,
+            "median": 2950.0,
+            "max": 16500.0,
+            "mean": 5362.7798,
+            "std": 5444.7796,
+            "skew": 0.7415
+        },
+        "ITEM_COUNT": {
+            "dtype": "Int64",
+            "null_pct": 0.0,
+            "n_unique": 18,
+            "min": 1.0,
+            "median": 4.0,
+            "max": 21.0,
+            "mean": 6.55,
+            "std": 5.8971,
+            "skew": 0.951
+        }
+    },
+    "quality_warnings": [],
+    "role_hints": {
+        "likely_ids": [
+            "ORDER_ID"
+        ]
+    },
+    "sample_rows": [
+        {
+            "ORDER_ID": "ORD_2026_001",
+            "MONTH_KEY": "2026-01",
+            "CUSTOMER_SEGMENT": "Enterprise",
+            "TOTAL_REVENUE_USD": "12450.0",
+            "ITEM_COUNT": "15"
+        },
+        {
+            "ORDER_ID": "ORD_2026_002",
+            "MONTH_KEY": "2026-01",
+            "CUSTOMER_SEGMENT": "Mid-Market",
+            "TOTAL_REVENUE_USD": "3400.5",
+            "ITEM_COUNT": "4"
+        },
+        {
+            "ORDER_ID": "ORD_2026_003",
+            "MONTH_KEY": "2026-01",
+            "CUSTOMER_SEGMENT": "SMB",
+            "TOTAL_REVENUE_USD": "850.25",
+            "ITEM_COUNT": "2"
+        }
+    ]
+}

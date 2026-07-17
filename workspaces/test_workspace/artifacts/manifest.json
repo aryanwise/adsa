@@ -1,0 +1,1 @@
+{"artifacts": [{"filename": "best_model.joblib"}, {"filename": "preprocessor.joblib"}, {"filename": "label_encoder.joblib"}], "versions": {"sklearn_version": "1.2.0"}}

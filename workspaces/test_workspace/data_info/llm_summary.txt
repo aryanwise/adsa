@@ -1,0 +1,53 @@
+## 📊 Dataset Overview  
+
+| Aspect | Detail |
+|--------|--------|
+| **File** | `copy_test_data.csv` (100 rows × 5 columns) |
+| **Primary Key** | `ORDER_ID` – unique string identifier (100 distinct values) |
+| **Temporal Grain** | `MONTH_KEY` – month‑level period (10 distinct months, e.g., `2026‑01`) |
+| **Business Dimension** | `CUSTOMER_SEGMENT` – 4 categorical groups (Enterprise, Consumer, SMB, Mid‑Market) |
+| **Metrics** | `TOTAL_REVENUE_USD` (float) – revenue per order<br>`ITEM_COUNT` (int) – number of items in the order |
+
+### Column‑wise Data Types & Summary  
+
+| Column | Data Type | Null % | Unique | Key Stats |
+|--------|-----------|--------|--------|-----------|
+| **ORDER_ID** | String | 0 % | 100 | Identifier |
+| **MONTH_KEY** | String (date‑like) | 0 % | 10 | Most frequent months: `2026‑01` (14), `2026‑06/07/08/10` (10 each) |
+| **CUSTOMER_SEGMENT** | String (categorical) | 0 % | 4 | Balanced distribution (≈21‑37 rows per segment) |
+| **TOTAL_REVENUE_USD** | Float64 | 0 % | 72 | Min = 120.75, Median = 2 950, Mean = 5 362.78, Std = 5 444.78, Skew ≈ 0.74 (right‑skewed) |
+| **ITEM_COUNT** | Int64 | 0 % | 18 | Min = 1, Median = 4, Mean = 6.55, Std = 5.90, Skew ≈ 0.95 (right‑skewed) |
+
+### Data‑Quality Snapshot  
+
+- **No missing values** (null_pct = 0 % for all columns).  
+- **Skewness**: Both numeric fields exhibit moderate right‑skew (revenue ≈ 0.74, item count ≈ 0.95). Consider log‑transformation or robust statistics for modelling.  
+- **Potential outliers**: Revenue max = 16 500 USD, far above the median; item count max = 21. Visual inspection (box‑plots / histograms) is advisable.  
+- **No explicit quality warnings** flagged by the profiling tool.
+
+---
+
+## 🎯 Immediate Analytical Goals  
+
+1. **Revenue & Volume Trend Analysis**  
+   - **Objective**: Quantify month‑over‑month changes in total revenue and total items sold, segmented by `CUSTOMER_SEGMENT`.  
+   - **Why**: Reveals seasonality, growth patterns, and segment‑specific performance.  
+   - **Approach**: Group by `MONTH_KEY` × `CUSTOMER_SEGMENT`, aggregate `SUM(TOTAL_REVENUE_USD)` and `SUM(ITEM_COUNT)`, then plot time series or waterfall charts.
+
+2. **Customer‑Segment Profitability Profiling**  
+   - **Objective**: Compute average revenue per item (`TOTAL_REVENUE_USD / ITEM_COUNT`) and average order value per segment.  
+   - **Why**: Identifies which segments generate the highest margin per unit and where upsell opportunities exist.  
+   - **Approach**: Create derived metric `REVENUE_PER_ITEM`, then compare distributions across the four segments using box‑plots or statistical tests (ANOVA/Kruskal‑Wallis).
+
+3. **Predictive Order‑Size Modeling**  
+   - **Objective**: Build a lightweight regression model (e.g., linear regression, Random Forest) to predict `TOTAL_REVENUE_USD` from `MONTH_KEY`, `CUSTOMER_SEGMENT`, and `ITEM_COUNT`.  
+   - **Why**: Enables forecasting of future revenue based on order composition and temporal factors.  
+   - **Approach**: Encode categorical variables (one‑hot or target encoding), optionally log‑transform revenue to mitigate skew, evaluate with cross‑validation (RMSE, MAE).
+
+---
+
+### Quick Next Steps  
+
+1. Load the CSV into a pandas/PySpark DataFrame and verify that `MONTH_KEY` can be parsed as a datetime period.  
+2. Visualize the distributions of `TOTAL_REVENUE_USD` and `ITEM_COUNT` (histograms + box‑plots) to confirm outlier impact.  
+3. Implement the three analyses above in a Jupyter notebook or a reproduc

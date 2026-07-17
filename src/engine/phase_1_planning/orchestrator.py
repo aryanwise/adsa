@@ -98,34 +98,79 @@ class Phase1Orchestrator:
                 f.write(llm_summary)
                 
             # 4. PLANNING
-            console.print("  [white]├─ Drafting Execution Blueprint...[/white]")
+            console.print("  [white]├─ Drafting Execution Blueprint Markdown...[/white]")
             planner = PipelinePlanner()
             blueprint = planner.build_plan(profile_data=profile_data, user_objective=objective)
             
-            # 5. SAVE BLUEPRINT
-            blueprint_path = self.data_info_dir / "blueprint.txt"
+            # 5. SAVE BLUEPRINT AS MARKDOWN FILE
+            blueprint_path = self.data_info_dir / "blueprint.md"
+            with open(blueprint_path, "w", encoding="utf-8") as f:
+                f.write(blueprint)
+
+            # 5. SAVE BLUEPRINT AS MARKDOWN FILE
+            blueprint_path = self.data_info_dir / "blueprint.md"
             with open(blueprint_path, "w", encoding="utf-8") as f:
                 f.write(blueprint)
                 
-            # 6. UPDATE SESSION STATE (With Dynamic Graph for Phase 2)
+            # --- EXTRACT DYNAMIC REQUIREMENTS ---
+            console.print("  [white]├─ Generating requirements.txt...[/white]")
+            requirements = []
+            in_reqs_section = False
+            
+            for line in blueprint.split('\n'):
+                clean_line = line.strip()
+                
+                if "4. Python Package Requirements" in clean_line:
+                    in_reqs_section = True
+                    continue
+                
+                if in_reqs_section:
+                    if clean_line.startswith('#') and "4." not in clean_line:
+                        break
+                    
+                    if clean_line.startswith(('-', '*', '•')):
+                        # Use lstrip to ONLY remove the bullet points at the start of the line
+                        # Then split to grab the word, and strip any backticks
+                        stripped_line = clean_line.lstrip('-*• ').strip()
+                        parts = stripped_line.split()
+                        
+                        if len(parts) > 0:
+                            pkg_name = parts[0].replace('`', '').lower()
+                            if pkg_name:
+                                requirements.append(pkg_name)
+            
+            req_path = self.workspace_path / "requirements.txt"
+            with open(req_path, "w", encoding="utf-8") as f:
+                f.write("\n".join(requirements))
+            console.print(f"  [green]└─ Saved {len(requirements)} dependencies to requirements.txt[/green]")
+                
+            # 6. UPDATE SESSION STATE (With Markdown Heading Extraction Graph)
             state_file = self.workspace_path / "session_state.json"
             if state_file.exists():
                 with open(state_file, "r", encoding="utf-8") as f:
                     state = json.load(f)
                 
-                # Extract step titles from the blueprint
-                steps = [line.strip() for line in blueprint.split('\n') if line.strip().startswith('**Step')]
+                # UPDATED PARSER: Extracts steps matching the standard Markdown H3 syntax '### Step X:'
+                steps = [
+                    line.replace('###', '').strip() 
+                    for line in blueprint.split('\n') 
+                    if line.strip().startswith('### Step')
+                ]
                 
-                # Update Phase 1 Planning State
+                # Fallback safeguard: if LLM changes header notation, capture raw bold notation
+                if not steps:
+                    steps = [line.replace('**', '').strip() for line in blueprint.split('\n') if line.strip().startswith('**Step')]
+                
+                # Update Phase 1 Planning State Tracker Paths
                 state["Phase_1_Planning"]["status"] = "COMPLETED"
                 state["Phase_1_Planning"]["raw_data_path"] = dataset_path
                 state["Phase_1_Planning"]["prompt"] = objective
                 state["Phase_1_Planning"]["data_profile_path"] = "data_info/profiler_summary.txt"
                 state["Phase_1_Planning"]["llm_summary_path"] = "data_info/llm_summary.txt"
-                state["Phase_1_Planning"]["blueprint_path"] = "data_info/blueprint.txt"
+                state["Phase_1_Planning"]["blueprint_path"] = "data_info/blueprint.md" # Swapped extension
                 state["Phase_1_Planning"]["blueprint"] = steps
                 
-                # Initialize Phase 2 Execution State (The Dynamic Graph)
+                # Initialize Phase 2 Execution State (The Dynamic Graph Engine)
                 execution_plan = {}
                 for i, step_title in enumerate(steps, start=1):
                     execution_plan[f"step_{i}"] = {

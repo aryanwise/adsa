@@ -15,47 +15,68 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 # 🧠 COMPONENT DEFINITIONS (Models + Prompts + Formatters)
 # =================================================================
 class Architect:
-    """High-level structural planning & task checklists (Fast cloud execution)"""
+    """High-level structural planning & task checklists (Enforces MD Contracts)"""
     MODEL = "openai/gpt-oss-120b"
     ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
 
     SYSTEM_PROMPT = """
-    You are a Principal Data Science Architect. Your job is to translate statistical metadata and user objectives into a rigorous, production-grade machine learning blueprint.
-    You DO NOT write raw python code. You DO NOT write conversational filler.
-    Every word must serve a technical purpose.
+    You are a Principal Data Science Architect. Your job is to translate statistical metadata and user objectives into a rigorous, production-grade machine learning blueprint saved as a markdown contract file.
+    You DO NOT write raw python code. You DO NOT write conversational filler. 
+    Every section must contain actionable constraints for an execution agent.
 
-    SECURITY RULE:
+    SECURITY & RELATIVE PATH PATHING RULES:
     Assume the execution environment is a strictly jailed workspace directory.
-    All file reads, writes, and model persistence steps MUST use relative paths (e.g., 'data/active/data.csv' or 'models/model.pkl'). Do not use absolute paths or attempt directory traversal.
+    All file reads, writes, and model persistence steps MUST use relative paths (e.g., 'data/active/copy_test_data.csv' or 'artifacts/best_model.joblib'). Do not use absolute paths or attempt directory traversal.
     """
 
     @staticmethod
     def get_user_prompt(profile_data: dict, user_objective: str) -> str:
+        # Dynamically isolate likely target fields from metadata if present
         return f"""
-        🎯 USER PROBLEM PROMPT (Goal):
+        🎯 USER PROBLEM OBJECTIVE:
         {user_objective}
 
-        📊 DATASET PROFILE (Anonymized Statistics):
+        📊 DATASET PROFILE SPECTRA:
         {json.dumps(profile_data, indent=2)}
 
-        Design an end-to-end data science execution blueprint based on the Goal and Data Profile.
+        Design an end-to-end data science execution contract blueprint. You must output the entire response in clean Markdown formatting exactly matching the schema template below.
 
-        CRITICAL INSTRUCTIONS:
-        1. Address specific data quality issues (skewness, scaling, categorical encoding) based on the JSON profile provided.
-        2. In the modeling step, explicitly suggest 2 to 3 distinct machine learning algorithms that fit the problem, specifying which one to start with as the baseline.
-        3. Include a robust validation strategy (e.g., Stratified K-Fold) and explicit evaluation metrics.
+        CRITICAL PIPELINE ARCHITECTURE INSTRUCTIONS:
+        1. Target Variable Isolation: Explicitly enforce that the target column (e.g., 'CUSTOMER_SEGMENT') must be parsed out into a target vector 'y' and completely stripped from the feature matrix 'X' BEFORE fitting any transformers or pipelines to prevent 1.0 F1 score data leakage.
+        2. Categorical Targets: Explicitly mandate using `sklearn.preprocessing.LabelEncoder` on the target string vector to ensure full compatibility with multiclass algorithms like XGBoost.
+        3. Strict Validation Architecture: Mandate a clean hold-out partition (e.g., 20%) isolated at the very start of the modeling stage, entirely separate from any Stratified K-Fold cross-validation loops.
+        4. Model Diversity: Force a comparative evaluation using standard parameters across a baseline Logistic Regression, Random Forest, and a multiclass-configured XGBClassifier (without binary pos_weight parameters).
 
-        FORMATTING RULES:
-        - Output strictly a numbered list (e.g., "**Step 1: [Task Name]**").
-        - Group your steps logically (Data Loading -> Preprocessing -> Modeling -> Evaluation -> Persistence).
-        - Limit the entire blueprint to 8-12 steps.
-        - Use a maximum of 3 highly detailed, technical bullet points per step.
-        - Do NOT include any text outside of the numbered steps. Start immediately with Step 1.
+        OUTPUT STRUCTURE LAYOUT REQUIREMENTS:
+        Your response must start immediately with the title and contain these exact structural headers:
+        
+        # 🚀 Data Science Pipeline Blueprint
+        ## 🎯 1. User Objective
+        [Insert clean analytical translation of the user's objective here]
+
+        ## 📋 2. Core System Requirements & AI Guardrails
+        - **Target Isolation Constraint:** [Explicit target separation instruction]
+        - **Target Encoding Requirements:** [Explicit LabelEncoder instructions]
+        - **Validation Strategy Contract:** [Strict holdout partition and Stratified K-Fold requirements]
+        - **Pathing Boundaries:** All active dataset adjustments must target 'data/active/copy_test_data.csv' and all serializations must target the 'artifacts/' folder.
+
+        ## 🛠️ 3. Execution Engine Roadmap
+        For every step in the pipeline roadmap, use an H3 header structure matching:
+        ### Step 1: [Step Name]
+        - **Action:** [Provide 2-3 detailed technical execution bullet points outlining data transformations, drops, or training configurations]
+        - **Contract:** Input: [relative input path] | Output: [relative output path or artifact path]
+
+        ## 📦 4. Python Package Requirements
+        Analyze the pipeline you just created. List ONLY the third-party pip-installable packages required to execute the code (e.g., pandas, scikit-learn). 
+        - Do NOT list standard Python libraries (like os, json, math).
+        - Format them as a strict bulleted list of just the package names (e.g., `- scikit-learn`).
+
+        Make sure the step headings use exactly '### Step X:' so the system parsing engine can locate them. Limit the execution plan to 5-8 highly comprehensive steps. Do not append conversational text before or after the markdown content.
         """
 
 
 class Coder:
-    """Autonomous Python script generator for Phase 2 Execution (Groq Cloud)."""
+    """Autonomous Python script generator for Phase 2 Execution."""
     MODEL = os.getenv("GROQ_CODING_KEYL", "llama-3.3-70b-versatile")
     ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
     TEMPERATURE = 0.1
@@ -65,38 +86,37 @@ class Coder:
     SYSTEM_PROMPT = """
     You are an expert Data Science AI Programmer operating within a sandboxed workspace.
     CRITICAL RULES:
-    1. OUTPUT ONLY THE PURE PYTHON CODE BLOCK. No markdown wraps (unless specified), no conversation, no introductions.
+    1. OUTPUT ONLY THE PURE PYTHON CODE BLOCK. No markdown wraps (unless specified), no conversation.
     2. Ensure the code is strictly non-interactive (save plots using plt.savefig(), never plt.show()).
     3. All data reads/writes must use relative paths targeting 'data/active/copy_test_data.csv' or the 'artifacts/' folder.
-    4. You are PROHIBITED from using absolute system paths or directory traversals (../) to escape the workspace directory.
+    4. PROTECT CONTEXT TOKENS: Never print entire DataFrames or arrays. Only print df.shape, df.head(2), or specific metrics.
+    5. NEVER SWALLOW ERRORS: Do NOT wrap your imports or file loading in `try...except` blocks. Let the script crash natively with full tracebacks so the system orchestrator can catch them.
     """
 
     @staticmethod
     def get_user_prompt(step_title: str, step_details: str,
-                        full_plan: str, summary_txt: str) -> str:
+                        full_plan: str, summary_txt: str, memory_str: str) -> str:
         return f"""
-        CONTEXT METADATA SUMMARY:
-        {summary_txt}
+        ========================================================================
+        🧠 LIVE SANDBOX MEMORY (Outputs from previous steps):
+        {memory_str}
+        ========================================================================
 
-        FULL APPROVED PIPELINE BLUEPRINT:
+        📋 PIPELINE MARKDOWN CONTRACT (Your master instructions):
         {full_plan}
 
         ------------------------------------------------------------------------
-        CURRENT FOCUS TASK:
-        You must write the code strictly for this step only:
-        🎯 {step_title}
-        Detailed Requirements:
+        🎯 CURRENT FOCUS TASK:
+        Write the complete Python script for this step ONLY:
+        ### {step_title}
         {step_details}
         ------------------------------------------------------------------------
 
         IMPLEMENTATION INSTRUCTIONS:
-        - Output ONLY code inside a single ```python block.
-        - The active dataset lives at 'data/active/copy_test_data.csv' (relative path).
-        - Each step must read the current state of that CSV, apply ONLY this step's
-          transformation, and overwrite the SAME file so the next step inherits it.
-        - Persist any other critical outputs (models, plots, JSON maps) into the
-          'artifacts/' directory using relative paths.
-        - Print concise confirmations of what was done (shapes, metrics, file paths).
+        - Output ONLY pure python code inside a single ```python block.
+        - Read the LIVE SANDBOX MEMORY to see exactly what columns exist *right now* and what files were saved.
+        - DO NOT guess the state of the data. Rely entirely on the memory logs and the active CSV file.
+        - Read the PIPELINE MARKDOWN CONTRACT to ensure you do not violate the Target Isolation or Validation Boundaries.
         """
 
     @staticmethod
@@ -116,7 +136,6 @@ class Coder:
         script. Preserve the step's intent and its input/output file contracts.
         Output ONLY the fixed script inside a single ```python block.
         """
-
 
 class Analyst:
     """Senior executive-grade summary reporting & massive token validation"""

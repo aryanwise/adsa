@@ -1,10 +1,10 @@
 """
-orchestrator.py — The State Machine Engine (Phase 2 Execution).
+orchestrator.py — The Stateful Memory Engine (Phase 2 Execution).
 
-Reads the dynamic execution graph from session_state.json, and for every
-pending step: generates a script (AICoder), runs it jailed (SandboxExecutor),
-self-corrects on tracebacks (max 3 total attempts per step), and persists
-state to disk after every transition so a crash never loses progress.
+Reads the dynamic execution graph from session_state.json. Features:
+  - Pre-flight Dependency Installer (reads requirements.txt before starting).
+  - Token-Safe Sliding Window Memory (feeds past step logs to prevent AI amnesia).
+  - Generates, executes, and repairs via 3-attempt cycle.
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ class Phase2Orchestrator:
         """Returns (full_blueprint_text, profile_data_dict) from Phase 1 outputs."""
         planning: dict = self.state.get("Phase_1_Planning", {})
 
-        blueprint_rel = planning.get("blueprint_path", "data_info/blueprint.txt")
+        blueprint_rel = planning.get("blueprint_path", "data_info/blueprint.md") # Ensure .md extension
         blueprint_file = self.workspace_path / blueprint_rel
         full_blueprint = blueprint_file.read_text(encoding="utf-8") \
             if blueprint_file.exists() else "\n".join(planning.get("blueprint", []))
@@ -74,12 +74,13 @@ class Phase2Orchestrator:
 
     @staticmethod
     def _split_blueprint_details(full_blueprint: str) -> dict[str, str]:
-        """Map each '**Step N: ...**' header to its detail block (header + bullets)."""
+        """Map each '### Step N: ...' header to its detail block (header + bullets)."""
         blocks: dict[str, str] = {}
         current_title: Optional[str] = None
         current_lines: list[str] = []
         for line in full_blueprint.splitlines():
-            if line.strip().startswith("**Step"):
+            # Support both Markdown H3 and legacy Bold formats
+            if line.strip().startswith("### Step") or line.strip().startswith("**Step"):
                 if current_title is not None:
                     blocks[current_title] = "\n".join(current_lines).strip()
                 current_title = Phase2Orchestrator._normalize_title(line)
@@ -92,9 +93,28 @@ class Phase2Orchestrator:
 
     @staticmethod
     def _normalize_title(title: str) -> str:
-        return re.sub(r"\s+", " ", title.replace("*", "").strip()).lower()
+        return re.sub(r"\s+", " ", title.replace("*", "").replace("#", "").strip()).lower()
 
     # ------------------------------------------------------------- engine
+    
+    def _get_safe_history(self, step_results: dict, max_chars: int = 1500) -> str:
+        """
+        Token-Safe Memory: Truncates historical stdout/stderr to prevent API bloat 
+        while preserving the state and shape of the data for the next step.
+        """
+        if not step_results:
+            return "No prior steps executed. You are on Step 1."
+            
+        history = ""
+        for step_id, data in step_results.items():
+            if data.get("success"):
+                tail = data.get('stdout_tail', '')[-max_chars:]
+                history += f"✅ {step_id} SUCCESS:\n...{tail}\n\n"
+            else:
+                tail = data.get('stderr_tail', '')[-max_chars:]
+                history += f"❌ {step_id} FAILED:\n...{tail}\n\n"
+        return history
+
     def execute(self) -> bool:
         try:
             self._load_state()
@@ -117,7 +137,7 @@ class Phase2Orchestrator:
         phase2.setdefault("step_results", {})
         self._persist_state()
 
-        # Build the cloud coder lazily so state validation errors surface first.
+        # Build the cloud coder lazily
         try:
             coder = self._coder or AICoder(self.workspace_path)
         except (FileNotFoundError, AICoderError) as exc:
@@ -125,6 +145,18 @@ class Phase2Orchestrator:
             phase2["status"] = "HALTED"
             self._persist_state()
             return False
+
+        # --- PRE-FLIGHT INSTALLATION ---
+        req_path = self.workspace_path / "requirements.txt"
+        if req_path.exists():
+            console.print("  [white]├─ Checking sandbox dependencies...[/white]")
+            console.print("  [white]│    ↳ Pre-installing requirements.txt...[/white]")
+            success = self._sandbox._pip_install_requirements()
+            if success:
+                console.print("  [white]│    ↳[/white] [green]Dependencies fully loaded.[/green]")
+            else:
+                console.print("  [white]│    ↳[/white] [yellow]Warning: Pre-install had some errors. Sandbox will auto-heal if needed.[/yellow]")
+        # -------------------------------
 
         full_blueprint, profile_data = self._load_planning_artifacts()
         details_map = self._split_blueprint_details(full_blueprint)
@@ -146,7 +178,7 @@ class Phase2Orchestrator:
             script_abs: Path = self.workspace_path / script_rel
 
             console.print(f"  [white]├─ Executing {step_id}:[/white] "
-                          f"[cyan]{title.replace('*', '').strip()}[/cyan]")
+                          f"[cyan]{title.replace('*', '').replace('#', '').strip()}[/cyan]")
 
             success = self._run_single_step(
                 coder=coder, step=step, title=title, details=details,
@@ -166,7 +198,7 @@ class Phase2Orchestrator:
         phase2["status"] = "COMPLETED"
         self._persist_state()
         console.print("  [bold green]└─ Phase 2 Completed! "
-                      "All steps executed and state persisted.[/bold green]")
+                      "All steps executed safely.[/bold green]")
         return True
 
     # ----------------------------------------------------- per-step logic
@@ -181,6 +213,9 @@ class Phase2Orchestrator:
         current_code: str = ""
         last_result: dict = {}
 
+        # Fetch sliding-window memory of all prior steps cleanly from the session state
+        memory_str = self._get_safe_history(phase2.get("step_results", {}))
+
         while step["attempts"] < MAX_ATTEMPTS_PER_STEP:
             step["attempts"] += 1
             attempt: int = step["attempts"]
@@ -190,9 +225,12 @@ class Phase2Orchestrator:
                 if attempt == 1:
                     console.print(f"  [white]│    ↳ generating script "
                                   f"(attempt {attempt}) ...[/white]")
+                    
+                    # UPDATED: Pass full_blueprint cleanly and add memory_str as its own argument
                     current_code = coder.generate_script(
                         step_title=title, step_details=details,
-                        full_blueprint=full_blueprint, profile_data=profile_data)
+                        full_blueprint=full_blueprint, profile_data=profile_data,
+                        memory_str=memory_str)
                 else:
                     console.print(f"  [white]│    ↳ repairing script "
                                   f"(attempt {attempt}) ...[/white]")

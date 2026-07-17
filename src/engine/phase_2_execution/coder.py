@@ -91,7 +91,7 @@ class AICoder:
 
     # ------------------------------------------------------------- public
     def generate_script(self, step_title: str, step_details: str,
-                        full_blueprint: str, profile_data: dict) -> str:
+                        full_blueprint: str, profile_data: dict, memory_str: str) -> str:
         """Compile one blueprint step into a pure Python script string."""
         summary_txt = json.dumps(profile_data, indent=2, default=str)
         prompt = Coder.get_user_prompt(
@@ -99,6 +99,7 @@ class AICoder:
             step_details=step_details,
             full_plan=full_blueprint,
             summary_txt=summary_txt,
+            memory_str=memory_str  
         )
         return self._extract_code(self._chat(prompt))
 

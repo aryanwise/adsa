@@ -30,6 +30,7 @@ def print_custom_help(ctx):
     table.add_column("Description", style="white")
 
     table.add_row("init", "Initializes a sandboxed agent workspace with an isolated virtual environment")
+    table.add_row("list", "Lists all active workspaces and their current Phase progress")
     table.add_row("run", "Runs the pipeline from src/api/main.py")
     table.add_row("session", "Displays all project information from the session_state.json")
     table.add_row("progress", "Displays only the completed tasks from the session state json")
@@ -87,13 +88,14 @@ def init(project_name):
     (target_dir / "data_info").mkdir(parents=True, exist_ok=True)
     (target_dir / "generated_scripts").mkdir(parents=True, exist_ok=True)
     (target_dir / "templates").mkdir(parents=True, exist_ok=True)
+    (target_dir / "artifacts").mkdir(parents=True, exist_ok=True)
 
     venv_dir = target_dir / "venv"
     uv_available = subprocess.run(["where" if sys.platform == "win32" else "which", "uv"], 
                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
 
     if uv_available:
-        subprocess.run(["uv", "venv", str(venv_dir)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(["uv", "venv", str(venv_dir), "--seed"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         env_type = "uv venv"
     else:
         subprocess.run([sys.executable, "-m", "venv", str(venv_dir)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -274,6 +276,65 @@ def delete_workspace(project_name):
             console.print(f"\n[bold red]Error deleting workspace:[/bold red] {e}")
     else:
         console.print("\n[yellow]Deletion cancelled. The workspace remains untouched.[/yellow]")
+
+# ==========================================================
+# 6. LIST COMMAND
+# ==========================================================
+@main.command(name="list")
+def list_projects():
+    """Lists all active workspaces and their current progress."""
+    workspaces_path = Path("workspaces")
+    
+    if not workspaces_path.exists() or not workspaces_path.is_dir():
+        console.print("[yellow]⚠️ No 'workspaces' directory found. You don't have any projects yet.[/yellow]")
+        return
+        
+    projects = [d for d in workspaces_path.iterdir() if d.is_dir()]
+    
+    if not projects:
+        console.print("[yellow]📂 No active projects found in the workspaces directory.[/yellow]")
+        return
+
+    console.print("\n[green]📁 Active ADSA Projects[/green]")
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("Project Name", style="cyan", no_wrap=True)
+    table.add_column("Phase 1 (Planning)", justify="center")
+    table.add_column("Phase 2 (Execution)", justify="center")
+    
+    for proj in sorted(projects):
+        project_name = proj.name
+        state_file = proj / "session_state.json"
+        
+        p1_status = "[dim]NOT STARTED[/dim]"
+        p2_status = "[dim]NOT STARTED[/dim]"
+        
+        if state_file.exists():
+            try:
+                with open(state_file, "r", encoding="utf-8") as f:
+                    state = json.load(f)
+                    
+                p1_raw = state.get("Phase_1_Planning", {}).get("status", "PENDING")
+                p2_raw = state.get("Phase_2_Execution", {}).get("status", "PENDING")
+                
+                # Color code Phase 1
+                p1_status = f"[green]{p1_raw}[/green]" if p1_raw == "COMPLETED" else f"[yellow]{p1_raw}[/yellow]"
+                
+                # Color code Phase 2
+                if p2_raw == "COMPLETED":
+                    p2_status = f"[green]{p2_raw}[/green]"
+                elif p2_raw == "IN_PROGRESS":
+                    p2_status = f"[blue]{p2_raw}[/blue]"
+                else:
+                    p2_status = f"[yellow]{p2_raw}[/yellow]"
+                    
+            except Exception:
+                p1_status = "[red]ERROR[/red]"
+                p2_status = "[red]ERROR[/red]"
+                
+        table.add_row(project_name, p1_status, p2_status)
+        
+    console.print(table)
+    console.print()
 
 if __name__ == '__main__':
     main()

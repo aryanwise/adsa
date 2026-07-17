@@ -84,14 +84,21 @@ class SandboxExecutor:
 
     def _append_requirement(self, package: str) -> None:
         existing: set[str] = set()
+        content = ""
+        
         if self.requirements_path.exists():
+            content = self.requirements_path.read_text(encoding="utf-8")
             existing = {
                 line.strip().split("==")[0].lower()
-                for line in self.requirements_path.read_text(encoding="utf-8").splitlines()
+                for line in content.splitlines()
                 if line.strip() and not line.strip().startswith("#")
             }
+            
         if package.lower() not in existing:
             with open(self.requirements_path, "a", encoding="utf-8") as f:
+                # Safely ensure we are on a new line before appending
+                if content and not content.endswith("\n"):
+                    f.write("\n")
                 f.write(f"{package}\n")
 
     def _pip_install_requirements(self) -> bool:
